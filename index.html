@@ -236,9 +236,12 @@ async function syncSystemState() {
         /* DANGER CONDITION */
 
         if (
-            distance < 70 ||
-            moisture < 1500
-        ) {
+    !isNaN(distance) &&
+    !isNaN(moisture) &&
+    distance > 0 &&
+    moisture > 0 &&
+    (distance < 70 || moisture < 1500)
+    ) {
 
             statusAlert.innerText =
                 "🚨 DANGER: EVACUATE";
