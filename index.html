@@ -44,9 +44,9 @@
 
 <script>
     // ⚠️ INPUT YOUR UNIQUE NUMERIC THINGSPEAK CHANNEL DETAILS HERE
-    const channelID = "3456662"; 
-    const url = `https://thingspeak.com${channelID}/feeds/last.json`;
     
+    const channelID = "3456662";
+const url = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?_=${Date.now()}`;
     let audioCtx = null;
     let sirenInterval = null;
 
@@ -136,40 +136,41 @@
     const statusAlert = document.getElementById("statusAlert");
     const logsDisplay = document.getElementById("logsDisplay");
 
-    try {
-        statusAlert.innerText = "CONNECTING TO THINGSPEAK...";
+    statusAlert.innerText = "🔄 CONNECTING...";
+    statusAlert.className = "status-header safe";
 
-        const response = await fetch(url);
+    try {
+        const response = await fetch(url, {
+            cache: "no-store"
+        });
 
         if (!response.ok) {
-            throw new Error("HTTP Error: " + response.status);
+            throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
-
-        console.log(data);
 
         statusAlert.innerText = "✅ THINGSPEAK CONNECTED";
         statusAlert.className = "status-header safe";
 
         logsDisplay.innerHTML = `
-            <strong>LIVE THINGSPEAK DATA:</strong><br><br>
+            <strong>LIVE DATA RECEIVED:</strong><br><br>
             • Field 1: ${data.field1}<br>
             • Field 2: ${data.field2}<br>
-            • Field 3: ${data.field3}<br><br>
+            • Field 3: ${data.field3}<br>
             • Last Update: ${data.created_at}
         `;
 
     } catch (err) {
-        console.error(err);
-
         statusAlert.innerText = "⚠️ CONNECTION ERROR";
         statusAlert.className = "status-header danger";
 
         logsDisplay.innerHTML = `
-            <strong>ERROR:</strong><br>
-            ${err.message}
+            <strong>ThingSpeak connection failed</strong><br><br>
+            Error: ${err.message}
         `;
+
+        console.error("ThingSpeak error:", err);
     }
 }
 </script>
