@@ -132,7 +132,79 @@
 
     // Automatically check cloud channels wirelessly over the air every 15 seconds
     setInterval(syncSystemState, 15000);
-    syncSystemState();
+    async function syncSystemState()
+    {
+    const statusAlert = document.getElementById("statusAlert");
+    const logsDisplay = document.getElementById("logsDisplay");
+
+    try {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`ThingSpeak returned HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        console.log("ThingSpeak data:", data);
+
+        const distance = parseFloat(data.field1);
+        const moisture = parseInt(data.field2);
+
+        if (isNaN(distance) || isNaN(moisture)) {
+            throw new Error("Field 1 or Field 2 has no valid sensor data");
+        }
+
+        if (distance < 70 || moisture < 1500) {
+            statusAlert.innerText = "🚨 DANGER: EVACUATE";
+            statusAlert.className = "status-header danger";
+            logsDisplay.className = "telemetry-logs danger-border";
+
+            logsDisplay.innerHTML = `
+                <strong>⚠️ ALERT DETECTED</strong><br><br>
+                • Sensor Distance: ${distance} cm<br>
+                • Mud Saturation: ${moisture} ADC
+            `;
+
+            if (!sirenInterval) {
+                sirenInterval = setInterval(triggerPhoneSiren, 450);
+            }
+
+        } else {
+            statusAlert.innerText = "✅ SYSTEM SAFE";
+            statusAlert.className = "status-header safe";
+            logsDisplay.className = "telemetry-logs";
+
+            logsDisplay.innerHTML = `
+                <strong>Environmental Metrics Normal:</strong><br>
+                • Sensor Distance: ${distance} cm<br>
+                • Mud Saturation: ${moisture} ADC<br>
+                • Field Status: All Alarms Silent.
+            `;
+
+            if (sirenInterval) {
+                clearInterval(sirenInterval);
+                sirenInterval = null;
+            }
+        }
+
+    } catch (err) {
+        console.error("ThingSpeak error:", err);
+
+        statusAlert.innerText = "⚠️ CONNECTION ERROR";
+        statusAlert.className = "status-header danger";
+
+        logsDisplay.className = "telemetry-logs danger-border";
+        logsDisplay.innerHTML = `
+            <strong>Unable to read ThingSpeak data.</strong><br><br>
+            Error: ${err.message}<br><br>
+            Check:<br>
+            • Channel ID<br>
+            • ThingSpeak channel visibility<br>
+            • Field 1 and Field 2 data
+        `;
+    }
+}
 </script>
 </body>
 </html>
