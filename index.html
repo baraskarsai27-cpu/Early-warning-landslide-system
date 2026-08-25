@@ -1,17 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>
-    // 1. Enter your numeric ThingSpeak Channel ID here (e.g., "123456")
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landslide Dual-Alarm Live Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .mobile-shell { max-width: 420px; margin: 15px auto; padding: 25px; background: white; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .status-header { font-size: 1.8rem; font-weight: bold; margin: 20px 0; padding: 20px; border-radius: 10px; color: white; transition: background 0.4s ease; }
+        .safe { background-color: #2ecc71; box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3); }
+        .danger { background-color: #e74c3c; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); animation: screen-flash 0.8s infinite; }
+        @keyframes screen-flash { 0% { background-color: #e74c3c; } 50% { background-color: #c0392b; } 100% { background-color: #e74c3c; } }
+        .telemetry-logs { text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid #bdc3c7; font-size: 1rem; line-height: 1.6; }
+        .danger-border { border-left: 5px solid #e74c3c; }
+        .btn-audio { background: #e67e22; color: white; border: none; padding: 12px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; margin-bottom: 15px; width: 100%; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<div class="mobile-shell">
+    <h2>Landslide Monitor</h2>
+    <button class="btn-audio" onclick="unlockMobileSpeaker()">🔊 Enable Phone Audio Sirens</button>
+    <div id="statusAlert" class="status-header safe">SYNCHRONIZING...</div>
+    <div class="telemetry-logs" id="logsDisplay">
+        <p>🔄 Querying wireless cloud streams...</p>
+    </div>
+</div>
+
+<script>
+    // 1. Swap the numbers below with your actual numeric channel ID digits
     const channelID = "3456662"; 
-    
-    // FIXED: Corrected the ThingSpeak API path and added the missing '$' for template literal
     const url = `https://thingspeak.com{channelID}/feeds/last.json`;
     
     let audioCtx = null;
     let sirenInterval = null;
 
-    // Grants the website code access to use your mobile device speakers
     function unlockMobileSpeaker() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -19,22 +42,17 @@
         }
     }
 
-    // Generates a sharp synthetic ambulance-style sweeping siren out of your phone speakers
     function triggerPhoneSiren() {
         if (!audioCtx) return;
         let oscillator = audioCtx.createOscillator();
         let ampNode = audioCtx.createGain();
-        
         oscillator.type = "sawtooth";
         oscillator.frequency.setValueAtTime(950, audioCtx.currentTime); 
         oscillator.frequency.linearRampToValueAtTime(480, audioCtx.currentTime + 0.35); 
-        
         ampNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
         ampNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-        
         oscillator.connect(ampNode);
         ampNode.connect(audioCtx.destination);
-        
         oscillator.start();
         oscillator.stop(audioCtx.currentTime + 0.35);
     }
@@ -42,27 +60,22 @@
     async function syncSystemState() {
         let statusAlert = document.getElementById("statusAlert");
         let logsDisplay = document.getElementById("logsDisplay");
+        if (!statusAlert || !logsDisplay) return;
 
         try {
             let response = await fetch(url);
-            
-            // FIXED: Added verification to check if ThingSpeak channel exists or is public
             if (!response.ok) {
                 throw new Error(`HTTP Error Status: ${response.status}`);
             }
 
             let data = await response.json();
-            
-            // Extract the fields exactly as mapped in your hardware code
-            let distance = parseFloat(data.field1); // Field 1: Ultrasonic Sensor Gap
-            let moisture = parseInt(data.field2);    // Field 2: Soil Wetness Score
+            let distance = parseFloat(data.field1); 
+            let moisture = parseInt(data.field2);    
 
-            // FIXED: Guard against empty channels that haven't received hardware data yet
             if (isNaN(distance) || isNaN(moisture)) {
-                throw new Error("Channel found, but fields contain empty or null data.");
+                throw new Error("Channel found, but sensor fields are empty or null.");
             }
 
-            // GLOBAL ALARM LOGIC CHECK: Checks if limits match the ESP32 trigger parameters
             if (distance < 70 || moisture < 1500) { 
                 statusAlert.innerText = "🚨 DANGER: EVACUATE";
                 statusAlert.className = "status-header danger";
@@ -75,7 +88,6 @@
                     • Sensor Distance: ${distance} cm (CRITICAL)<br>
                     • Mud Saturation: ${moisture} ADC (WATERLOGGED)
                 `;
-                
                 if (!sirenInterval) {
                     sirenInterval = setInterval(triggerPhoneSiren, 450);
                 }
@@ -89,7 +101,6 @@
                     • Mud Saturation: ${moisture} ADC (Dry Mud)<br>
                     • Field Status: All Alarms Silent.
                 `;
-                
                 if (sirenInterval) {
                     clearInterval(sirenInterval);
                     sirenInterval = null;
@@ -97,23 +108,21 @@
             }
         } catch (err) {
             console.log("Wireless data packet sync drop:", err);
-            
-            // FIXED: Updates UI to notify you exactly why the synchronization failed
             statusAlert.innerText = "❌ SYNC FAILED";
             statusAlert.style.backgroundColor = "#7f8c8d";
             logsDisplay.innerHTML = `
                 <strong style="color: #c0392b;">Connection Error:</strong><br>
                 ${err.message}<br><br>
                 <strong>Troubleshooting Steps:</strong><br>
-                1. Verify your channel ID is correct.<br>
-                2. Make sure your ThingSpeak Channel sharing is set to <b>Public</b>.
+                1. Verify your channel ID is typed correctly inside the code.<br>
+                2. Make sure your ThingSpeak Channel sharing status is set to <b>Public</b>.
             `;
         }
     }
 
-    // Automatically check cloud channels wirelessly over the air every 15 seconds
     setInterval(syncSystemState, 15000);
     syncSystemState();
 </script>
+
 </body>
 </html>
