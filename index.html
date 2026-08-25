@@ -45,8 +45,9 @@
 <script>
     // ⚠️ INPUT YOUR UNIQUE NUMERIC THINGSPEAK CHANNEL DETAILS HERE
     
+    
     const channelID = "3456662";
-const url = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?_=${Date.now()}`;
+const url = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?results=1`;
     
     let audioCtx = null;
     let sirenInterval = null;
@@ -140,40 +141,64 @@ const url = `https://api.thingspeak.com/channels/${channelID}/feeds/last.json?_=
     statusAlert.innerText = "🔄 CONNECTING...";
     statusAlert.className = "status-header safe";
 
+    logsDisplay.innerHTML = `
+        <strong>Connecting to ThingSpeak...</strong>
+    `;
+
     try {
+        console.log("Fetching:", url);
+
         const response = await fetch(url, {
+            method: "GET",
             cache: "no-store"
         });
 
+        console.log("Response status:", response.status);
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error("HTTP Status: " + response.status);
         }
 
         const data = await response.json();
 
+        console.log("ThingSpeak data:", data);
+
+        if (data.field1 === null || data.field2 === null) {
+            throw new Error("Field 1 or Field 2 is empty");
+        }
+
         statusAlert.innerText = "✅ THINGSPEAK CONNECTED";
         statusAlert.className = "status-header safe";
 
+        logsDisplay.className = "telemetry-logs";
+
         logsDisplay.innerHTML = `
-            <strong>LIVE DATA RECEIVED:</strong><br><br>
+            <strong>📡 LIVE THINGSPEAK DATA</strong><br><br>
             • Field 1: ${data.field1}<br>
             • Field 2: ${data.field2}<br>
-            • Field 3: ${data.field3}<br>
+            • Field 3: ${data.field3}<br><br>
             • Last Update: ${data.created_at}
         `;
 
     } catch (err) {
-        statusAlert.innerText = "⚠️ CONNECTION ERROR";
+        console.error("FULL CONNECTION ERROR:", err);
+
+        statusAlert.innerText = "⚠️ CONNECTION LOST";
         statusAlert.className = "status-header danger";
 
-        logsDisplay.innerHTML = `
-            <strong>ThingSpeak connection failed</strong><br><br>
-            Error: ${err.message}
-        `;
+        logsDisplay.className = "telemetry-logs danger-border";
 
-        console.error("ThingSpeak error:", err);
+        logsDisplay.innerHTML = `
+            <strong>❌ THINGSPEAK CONNECTION FAILED</strong><br><br>
+            <strong>Exact error:</strong><br>
+            ${err.name}: ${err.message}<br><br>
+
+            <strong>Channel:</strong> ${channelID}
+        `;
     }
 }
+    setInterval(syncSystemState, 15000);
+    syncSystemState();
 </script>
 </body>
 </html>
