@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Viewport scaling forces the layout to fit perfectly on small phone screens -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landslide Dual-Alarm Live Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .mobile-shell { max-width: 420px; margin: 15px auto; padding: 25px; background: white; border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .status-header { font-size: 1.8rem; font-weight: bold; margin: 20px 0; padding: 20px; border-radius: 10px; color: white; transition: background 0.4s ease; }
+        
+        /* Clean Green for system safety */
+        .safe { background-color: #2ecc71; box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3); }
+        
+        /* Flashing Emergency Red block for danger alert */
+        .danger { background-color: #e74c3c; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); animation: screen-flash 0.8s infinite; }
+        
+        @keyframes screen-flash {
+            0% { background-color: #e74c3c; }
+            50% { background-color: #c0392b; }
+            100% { background-color: #e74c3c; }
+        }
+        
+        .telemetry-logs { text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid #bdc3c7; font-size: 1rem; line-height: 1.6; }
+        .danger-border { border-left: 5px solid #e74c3c; }
+        .btn-audio { background: #e67e22; color: white; border: none; padding: 12px; font-size: 1.1rem; border-radius: 6px; cursor: pointer; margin-bottom: 15px; width: 100%; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<div class="mobile-shell">
+    <h2>Landslide Monitor</h2>
+    
+    <!-- Mobile browsers require this user tap to unlock phone speaker functionality -->
+    <button class="btn-audio" onclick="unlockMobileSpeaker()">🔊 Enable Phone Audio Sirens</button>
+    
+    <div id="statusAlert" class="status-header safe">SYNCHRONIZING...</div>
+    
+    <div class="telemetry-logs" id="logsDisplay">
+        <p>🔄 Querying wireless cloud streams...</p>
+    </div>
+</div>
+
+<script>
+    // ⚠️ INPUT YOUR UNIQUE NUMERIC THINGSPEAK CHANNEL DETAILS HERE
+    const channelID = "3456662"; 
+    const url = `https://thingspeak.com{3456662}/feeds/last.json`;
+    
+    let audioCtx = null;
+    let sirenInterval = null;
+
+    // Grants the website code access to use your mobile device speakers
+    function unlockMobileSpeaker() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            alert("Mobile speaker alarm pipeline initialized successfully!");
+        }
+    }
+
+    // Generates a sharp synthetic ambulance-style sweeping siren out of your phone speakers
+    function triggerPhoneSiren() {
+        if (!audioCtx) return;
+        let oscillator = audioCtx.createOscillator();
+        let ampNode = audioCtx.createGain();
+        
+        oscillator.type = "sawtooth";
+        oscillator.frequency.setValueAtTime(950, audioCtx.currentTime); // Sharp high frequency
+        oscillator.frequency.linearRampToValueAtTime(480, audioCtx.currentTime + 0.35); // Sweeping down
+        
+        ampNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        ampNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+        
+        oscillator.connect(ampNode);
+        ampNode.connect(audioCtx.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.35);
+    }
+
+    async function syncSystemState() {
+        try {
+            let response = await fetch(url);
+            let data = await response.json();
+            
+            // Extract the fields exactly as mapped in your hardware code
+            let distance = parseFloat(data.field1); // Field 1: Ultrasonic Sensor Gap
+            let moisture = parseInt(data.field2);    // Field 2: Soil Wetness Score
+
+            let statusAlert = document.getElementById("statusAlert");
+            let logsDisplay = document.getElementById("logsDisplay");
+
+            // GLOBAL ALARM LOGIC CHECK: Checks if limits match the ESP32 trigger parameters
+            if (distance < 70 || moisture < 1500) { 
+                statusAlert.innerText = "🚨 DANGER: EVACUATE";
+                statusAlert.className = "status-header danger";
+                logsDisplay.className = "telemetry-logs danger-border";
+                logsDisplay.innerHTML = `
+                    <strong>⚠️ DUAL ALARMS ACTIVATED:</strong><br>
+                    • Field Post: Hardware Buzzer Is Sounding!<br>
+                    • Phone Speaker: Mobile Siren Is Sounding!<br><br>
+                    <strong>🚨 LIVE TELEMETRY:</strong><br>
+                    • Sensor Distance: ${distance} cm (CRITICAL)<br>
+                    • Mud Saturation: ${moisture} ADC (WATERLOGGED)
+                `;
+                
+                // Fire the phone sound loop if it isn't already running
+                if (!sirenInterval) {
+                    sirenInterval = setInterval(triggerPhoneSiren, 450);
+                }
+            } else {
+                // Clear alarms and return dashboard to stable safe layout
+                statusAlert.innerText = "✅ SYSTEM SAFE";
+                statusAlert.className = "status-header safe";
+                logsDisplay.className = "telemetry-logs";
+                logsDisplay.innerHTML = `
+                    <strong>Environmental Metrics Normal:</strong><br>
+                    • Sensor Distance: ${distance} cm (Secure)<br>
+                    • Mud Saturation: ${moisture} ADC (Dry Mud)<br>
+                    • Field Status: All Alarms Silent.
+                `;
+                
+                if (sirenInterval) {
+                    clearInterval(sirenInterval);
+                    sirenInterval = null;
+                }
+            }
+        } catch (err) {
+            console.log("Wireless data packet sync drop:", err);
+        }
+    }
+
+    // Automatically check cloud channels wirelessly over the air every 15 seconds
+    setInterval(syncSystemState, 15000);
+    syncSystemState();
+</script>
+</body>
+</html>
